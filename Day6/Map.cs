@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace Day6;
 
 public class Map
@@ -7,7 +9,8 @@ public class Map
     public const char VisitedPath = 'X';
     
     public char[][] MapData { get; private set; }
-    
+    public Position? Position { get; private set; }
+
     public Map(string input)
     {
         var lines = input.Split("\n", StringSplitOptions.RemoveEmptyEntries);
@@ -16,6 +19,8 @@ public class Map
         MapData = new char[y][];
         for (int i = 0; i < MapData.Length; i++)
             MapData[i] = lines[i].ToCharArray();
+        
+        Init();
     }
 
     public Map(Map anotherMap) : this(anotherMap.MapData)
@@ -29,26 +34,35 @@ public class Map
         {
             MapData[i] = mapData[i].ToArray();
         }
-    }
 
-    public Position? GetCurrentPosition()
+        Init();
+    }
+    
+    private void Init()
     {
         for (int y = 0; y < MapData.Length; y++)
         {
             for (int x = 0; x < MapData[y].Length; x++)
             {
                 if (MapData[y][x] == '^')
-                    return new Position { X = x, Y = y, Direction = Direction.North };
+                    Position = new Position { X = x, Y = y, Direction = Direction.North };
                 if (MapData[y][x] == '>')
-                    return new Position { X = x, Y = y, Direction = Direction.East};
+                    Position = new Position { X = x, Y = y, Direction = Direction.East};
                 if (MapData[y][x] == 'v')
-                    return new Position { X = x, Y = y, Direction = Direction.South};
+                    Position = new Position { X = x, Y = y, Direction = Direction.South};
                 if (MapData[y][x] == '<')
-                    return new Position { X = x, Y = y, Direction = Direction.West };
+                    Position = new Position { X = x, Y = y, Direction = Direction.West };
+                
+                if (Position is not null)
+                    break;
             }
-        }
 
-        return null;
+            if (Position is not null)
+                break;
+        }
+        
+        if (Position is null)
+            throw new Exception("No starting position found");
     }
     
     public int GetDistinctPositionsCount()
@@ -56,15 +70,14 @@ public class Map
         return GetDistinctPositionsCount(new Map(this));
     }
     
-    private int GetDistinctPositionsCount(Map map)
+    private static int GetDistinctPositionsCount(Map map)
     {
         var loopDetector = new LoopDetector();
         
         while (map.MoveNext())
         {
-            var position = map.GetCurrentPosition();
-            if (position is not null)
-                loopDetector.DetectLoop(position.Value);
+            if (map.Position is not null)
+                loopDetector.DetectLoop(map.Position.Value);
         }
 
         int result = 0;
@@ -82,17 +95,16 @@ public class Map
 
     public bool MoveNext()
     {
-        var position = GetCurrentPosition();
-        if (position is null)
+        if (Position is null)
             return false;
 
         do
         {
             var positionAfterMove = new Position()
             {
-                X = position.Value.X,
-                Y = position.Value.Y,
-                Direction = position.Value.Direction
+                X = Position.Value.X,
+                Y = Position.Value.Y,
+                Direction = Position.Value.Direction
             };
             if (positionAfterMove.Direction == Direction.East)
                 positionAfterMove.X++;
@@ -107,19 +119,18 @@ public class Map
 
             if (IsPositionOutOfBounds(positionAfterMove))
             {
-                MapData[position.Value.Y][position.Value.X] = VisitedPath;
+                MapData[Position.Value.Y][Position.Value.X] = VisitedPath;
+                Position = null;
                 break;
             }
             else if (MapData[positionAfterMove.Y][positionAfterMove.X] == Obstacle)
             {
-                position = position.Value.Rotated();
+                Position = Position.Value.Rotated();
             }
             else if (IsWalkable(positionAfterMove))
             {
-                MapData[position.Value.Y][position.Value.X] = VisitedPath;
-                MapData[positionAfterMove.Y][positionAfterMove.X]
-                    = MapDirectionToChar(positionAfterMove.Direction);
-                position = positionAfterMove;
+                MapData[Position.Value.Y][Position.Value.X] = VisitedPath;
+                Position = positionAfterMove;
                 break;
             }
             else
@@ -144,25 +155,14 @@ public class Map
                || MapData[position.Y][position.X] == VisitedPath;
     }
     
-    private char MapDirectionToChar(Direction direction)
-    {
-        return direction switch
-        {
-            Direction.North => '^',
-            Direction.East => '>',
-            Direction.South => 'v',
-            Direction.West => '<',
-            _ => throw new NotImplementedException(direction.ToString())
-        };
-    }
-
     public bool IsParadoxWithAdditionalObstacle(int obstacleX, int obstacleY)
     {
+        var stopwatch = Stopwatch.StartNew();
         var newMapData = new char[MapData.Length][];
         for (int i = 0; i < MapData.Length; i++)
             newMapData[i] = MapData[i].ToArray();
         newMapData[obstacleY][obstacleX] = Obstacle;
-        
+
         try
         {
             _ = GetDistinctPositionsCount(new Map(newMapData));
@@ -172,16 +172,23 @@ public class Map
         {
             return true;
         }
+        finally
+        {
+            Console.WriteLine($"Executed point {obstacleX}/{obstacleY} in {stopwatch.ElapsedMilliseconds}ms");
+        }
     }
 
     public int PossibleParadoxesWithAdditionalObstacle()
     {
+        var traversedMap = new Map(this);
+        _ = GetDistinctPositionsCount(traversedMap);
         var obstacles = new List<Tuple<int, int>>();
         for (int y = 0; y < MapData.Length; y++)
         {
             for (int x = 0; x < MapData[y].Length; x++)
             {
-                if (MapData[y][x] == Path)
+                if (MapData[y][x] == Path && traversedMap.MapData[y][x] == VisitedPath)
+                // if (MapData[y][x] == Path)
                     obstacles.Add(new Tuple<int, int>(x, y));
             }
         }

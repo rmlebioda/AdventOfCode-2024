@@ -22,5 +22,6 @@ public static class Program
         result = new Map(input2).PossibleParadoxesWithAdditionalObstacle();
         stopwatch.Stop();
         Console.WriteLine($"Input 2 ({stopwatch.ElapsedMilliseconds}ms): {result}");
+        // on 8745HS: "Input 2 (2511381ms): 2162"
     }
 }
